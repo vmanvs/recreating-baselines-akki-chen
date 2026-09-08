@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "reference": {
+    "title": "Benchmarking Model Predictive Control and Reinforcement Learning-Based Control for Legged Robot Locomotion in MuJoCo Simulation",
+    "doi": "10.1109/ACCESS.2025.3582523",
+    "arxiv": "2501.16590v1"
+  },
+  "published_protocol": {
+    "robot": "Unitree Go1",
+    "simulator": "MuJoCo",
+    "commanded_velocity_m_s": [0.5, 0.0, 0.0],
+    "robot_mass_kg": 12.0,
+    "nominal_evaluation_duration_s": 50.0,
+    "displayed_push": {
+      "force_n": 150.0,
+      "duration_s": 0.2,
+      "impulse_n_s": 30.0,
+      "directions": ["+x", "-x", "+y", "-y"]
+    },
+    "failure_definition": "A non-foot body part, such as the torso, contacts the ground.",
+    "cot_convention": "Positive actuator mechanical work divided by m*g*distance; negative joint power is clipped to zero.",
+    "ppo": {
+      "implementation_family": "RL Baselines3 Zoo / Stable-Baselines3",
+      "policy": "MlpPolicy",
+      "learning_rate": 0.00059,
+      "n_steps": 128,
+      "total_timesteps": 1000000,
+      "clip_range": 0.2
+    },
+    "mpc": {
+      "implementation_family": "MuJoCo MPC",
+      "planner": "predictive sampling"
+    }
+  },
+  "reported_results_reference_only": {
+    "velocity_variance": {"ppo": 0.0012, "mpc": 0.056},
+    "cot": {"ppo": 1.768, "mpc": 2.993},
+    "maximum_force_n": {
+      "ppo": {"+x": 520, "-x": 950, "+y": 210, "-y": 250},
+      "mpc": {"+x": 260, "-x": 330, "+y": 290, "-y": 340}
+    }
+  },
+  "unresolved_from_public_artifact": [
+    "PPO observation and action spaces",
+    "PPO reward terms, scales, termination, reset distribution, and normalization",
+    "complete RL Zoo configuration and Optuna study",
+    "training and evaluation seeds and policy checkpoint",
+    "Go1 MJPC task XML and C++ residual/transition source",
+    "dependency versions or commits",
+    "physics, policy, actuator, and planner frequencies",
+    "actuator mode, limits, gains, action scaling, and filtering",
+    "MPC horizon, rollouts, spline representation, noise, costs, and weights",
+    "terrain geometry, friction, and perturbation sampling parameters"
+  ]
+}

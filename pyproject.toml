@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "go1-mpc-rl-benchmark"
+version = "0.1.0"
+description = "Independent, statistically controlled Go1 MPC and RL benchmark"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "Recreating Baselines contributors" }]
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3,<9",
+  "ruff>=0.9,<1",
+]
+analysis = [
+  "matplotlib>=3.9,<4",
+  "numpy>=2.0,<3",
+  "pandas>=2.2,<3",
+  "pyarrow>=18,<22",
+  "scipy>=1.14,<2",
+  "seaborn>=0.13,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/go1_benchmark"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"

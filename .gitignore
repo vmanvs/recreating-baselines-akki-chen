@@ -1,0 +1,20 @@
+private-docs/
+
+# Local environments and caches
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Generated experiment data and large artifacts
+artifacts/
+checkpoints/
+outputs/
+wandb/
+*.mp4
+
+# Keep small, curated result summaries under version control.
+!results/
+!results/**
