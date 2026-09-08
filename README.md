@@ -36,6 +36,12 @@ robustness envelope rather than a comparison based on a single perturbation.
   independent metric definitions.
 - [`tests/test_metrics.py`](tests/test_metrics.py): executable checks for those
   definitions.
+- [`src/go1_benchmark/fixed_velocity_env.py`](src/go1_benchmark/fixed_velocity_env.py):
+  actual MuJoCo Playground Go1 environment with the command fixed at 0.5 m/s.
+- [`src/go1_benchmark/train_ppo.py`](src/go1_benchmark/train_ppo.py): checkpointed
+  Brax PPO training with immutable upstream provenance.
+- [`src/go1_benchmark/evaluate_ppo.py`](src/go1_benchmark/evaluate_ppo.py):
+  full-collision rollout evaluation with deterministic MuJoCo force injection.
 
 ## Local setup
 
@@ -48,9 +54,14 @@ uv run python -m unittest discover -s tests -v
 ```
 
 MuJoCo Playground and MJPC will be pinned as external controller backends after
-their Go1 tasks have been validated on the Kaggle runtime. Generated rollouts,
+their Go1 tasks have been validated on the Kaggle runtime. The PPO backend is
+currently pinned to commit `8a4b4642d8eba8a80ac99ed125cb62c16e1457ad`.
+Generated rollouts,
 videos, checkpoints, and caches stay outside Git; small manifests, aggregate
 tables, figures, and environment locks belong in Git.
+
+See [`docs/running-on-kaggle.md`](docs/running-on-kaggle.md) for the implemented
+GPU training commands.
 
 ## Reproducibility language
 

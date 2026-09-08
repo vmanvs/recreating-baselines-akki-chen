@@ -12,6 +12,15 @@ license = { text = "MIT" }
 authors = [{ name = "Recreating Baselines contributors" }]
 dependencies = []
 
+[project.optional-dependencies]
+rl = [
+  "playground[cuda] @ git+https://github.com/google-deepmind/mujoco_playground.git@8a4b4642d8eba8a80ac99ed125cb62c16e1457ad",
+]
+
+[project.scripts]
+go1-train-ppo = "go1_benchmark.train_ppo:main"
+go1-evaluate-ppo = "go1_benchmark.evaluate_ppo:main"
+
 [dependency-groups]
 dev = [
   "pytest>=8.3,<9",
@@ -28,6 +37,9 @@ analysis = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/go1_benchmark"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

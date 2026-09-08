@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "upstream": {
+    "repository": "https://github.com/google-deepmind/mujoco_playground.git",
+    "commit": "8a4b4642d8eba8a80ac99ed125cb62c16e1457ad",
+    "environment": "Go1JoystickFlatTerrain"
+  },
+  "environment": {
+    "command_m_s_rad_s": [0.5, 0.0, 0.0],
+    "implementation": "jax",
+    "simulation_dt_s": 0.004,
+    "control_dt_s": 0.02,
+    "episode_length_steps": 1000,
+    "action_scale_rad": 0.5,
+    "kp": 35.0,
+    "kd": 0.5,
+    "observation_noise_level": 1.0,
+    "random_training_perturbations": false,
+    "training_collisions": "feet_only",
+    "evaluation_collisions": "full"
+  },
+  "profiles": {
+    "paper_budget_proxy": {
+      "description": "Uses the paper's reported total-step, learning-rate, and clipping values on the public Go1 MDP. This is not the authors' unavailable SB3 environment.",
+      "num_timesteps": 1000000,
+      "learning_rate": 0.00059,
+      "clipping_epsilon": 0.2,
+      "num_envs": 1024,
+      "num_eval_envs": 128,
+      "num_evals": 5
+    },
+    "playground_reference": {
+      "description": "Uses MuJoCo Playground's tuned Go1 PPO configuration and training budget.",
+      "num_timesteps": 200000000,
+      "learning_rate": 0.0003,
+      "num_envs": 8192,
+      "num_eval_envs": 128,
+      "num_evals": 10
+    }
+  }
+}

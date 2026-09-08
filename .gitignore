@@ -2,6 +2,8 @@ private-docs/
 
 # Local environments and caches
 .venv/
+.uv-cache/
+.upstream/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -14,6 +16,7 @@ checkpoints/
 outputs/
 wandb/
 *.mp4
+logs/
 
 # Keep small, curated result summaries under version control.
 !results/

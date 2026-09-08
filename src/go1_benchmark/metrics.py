@@ -7,6 +7,7 @@ tested before MuJoCo, JAX, or controller-specific dependencies are installed.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from itertools import pairwise
 from math import sqrt
 
 
@@ -94,7 +95,7 @@ def recovery_time(
         raise ValueError("times_s and errors must be non-empty and aligned")
     if tolerance < 0 or dwell_s < 0:
         raise ValueError("tolerance and dwell_s must be non-negative")
-    if any(t1 >= t2 for t1, t2 in zip(times_s, times_s[1:])):
+    if any(t1 >= t2 for t1, t2 in pairwise(times_s)):
         raise ValueError("times_s must be strictly increasing")
 
     for start_index, (time_s, error) in enumerate(zip(times_s, errors)):
