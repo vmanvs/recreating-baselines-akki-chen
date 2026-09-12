@@ -1,0 +1,20 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+*.egg-info/
+
+# MuJoCo compiled assets
+*.so
+*.dll
+*.dylib
+
+# Large binary/video files inside submodules (keep CSVs and PNGs)
+unitree_mujoco/.git/
+mujoco_menagerie/.git/
+mpc-and-rl-benchmark/.git/
+mpc-and-rl-benchmark/Other-Docs/*.mp4
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
