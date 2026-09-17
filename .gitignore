@@ -18,3 +18,16 @@ mpc-and-rl-benchmark/Other-Docs/*.mp4
 
 # Jupyter checkpoints
 .ipynb_checkpoints/
+
+# PPO environments, caches, and generated runs
+.venv/
+.uv-cache/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+outputs/
+artifacts/
+checkpoints/
+logs/
+wandb/
+persist/

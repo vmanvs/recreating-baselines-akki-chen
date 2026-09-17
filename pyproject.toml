@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "go1-mpc-rl-benchmark"
+version = "0.1.0"
+description = "Independent, statistically controlled Go1 MPC and RL benchmark"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "Recreating Baselines contributors" }]
+dependencies = []
+
+[project.optional-dependencies]
+rl = [
+  # Upstream fix for APIs removed in JAX 0.10; do not use PyPI Brax 0.14.2.
+  "brax @ https://github.com/google/brax/archive/303d89dfac42919e5fde7c91f24c28a505373b24.zip",
+  "jax==0.10.2",
+  "playground @ git+https://github.com/google-deepmind/mujoco_playground.git@8a4b4642d8eba8a80ac99ed125cb62c16e1457ad",
+]
+cuda = ["jax[cuda12]; sys_platform == 'linux'"]
+
+[project.scripts]
+go1-train-ppo = "go1_benchmark.train_ppo:main"
+go1-evaluate-ppo = "go1_benchmark.evaluate_ppo:main"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3,<9",
+  "ruff>=0.9,<1",
+]
+analysis = [
+  "matplotlib>=3.9,<4",
+  "numpy>=2.0,<3",
+  "pandas>=2.2,<3",
+  "pyarrow>=18,<22",
+  "scipy>=1.14,<2",
+  "seaborn>=0.13,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/go1_benchmark"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
