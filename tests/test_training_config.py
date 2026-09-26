@@ -36,6 +36,32 @@ class TrainingConfigTests(unittest.TestCase):
         self.assertLess(effective["gait"]["swing_fraction"], 0.25)
         self.assertNotIn("gait", document["environment"])
 
+    def test_calf_clearance_ablation_changes_only_gait_reward(self):
+        document, gait = _load_config(DEFAULT_CONFIG, "gait_aware_walk")
+        _, clearance = _load_config(DEFAULT_CONFIG, "gait_aware_calf_clearance")
+        for key in (
+            "num_timesteps",
+            "learning_rate",
+            "num_envs",
+            "num_eval_envs",
+            "num_evals",
+        ):
+            self.assertEqual(clearance[key], gait[key])
+        original_gait = gait["gait"]
+        new_gait = clearance["gait"]
+        for key in (
+            "period_s",
+            "swing_fraction",
+            "swing_order",
+            "target_swing_height_m",
+        ):
+            self.assertEqual(new_gait[key], original_gait[key])
+        for key, value in original_gait["reward_scales"].items():
+            self.assertEqual(new_gait["reward_scales"][key], value)
+        self.assertEqual(new_gait["calf_clearance_margin_m"], 0.015)
+        self.assertEqual(new_gait["reward_scales"]["walk_calf_clearance"], -2.0)
+        self.assertEqual(document["environment"]["training_collisions"], "feet_only")
+
     def test_latest_checkpoint_uses_highest_numeric_directory(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

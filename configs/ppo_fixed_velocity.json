@@ -56,6 +56,28 @@
           "walk_no_support": -2.0
         }
       }
+    },
+    "gait_aware_calf_clearance": {
+      "description": "Four-beat walk ablation with a symmetric calf2 capsule floor-clearance cost. Keeps the gait schedule, PPO settings, and feet-only training dynamics unchanged.",
+      "num_timesteps": 200000000,
+      "learning_rate": 0.0003,
+      "num_envs": 8192,
+      "num_eval_envs": 128,
+      "num_evals": 21,
+      "gait": {
+        "period_s": 0.8,
+        "swing_fraction": 0.22,
+        "swing_order": ["RL", "FL", "RR", "FR"],
+        "target_swing_height_m": 0.08,
+        "calf_clearance_margin_m": 0.015,
+        "reward_scales": {
+          "walk_contact_match": 2.0,
+          "walk_swing_height": 1.0,
+          "walk_multi_swing": -1.5,
+          "walk_no_support": -2.0,
+          "walk_calf_clearance": -2.0
+        }
+      }
     }
   }
 }

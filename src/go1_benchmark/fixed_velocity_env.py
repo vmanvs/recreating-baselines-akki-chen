@@ -49,6 +49,7 @@ def make_fixed_velocity_env(
     """
     modules = _imports()
     jp = modules["jp"]
+    import mujoco
     from mujoco import mjx
     from mujoco_playground._src import mjx_env
 
@@ -76,8 +77,15 @@ def make_fixed_velocity_env(
             "walk_multi_swing",
             "walk_no_support",
         }
+        if "calf_clearance_margin_m" in gait:
+            if float(gait["calf_clearance_margin_m"]) <= 0:
+                raise ValueError("gait.calf_clearance_margin_m must be positive")
+            expected.add("walk_calf_clearance")
         if set(scales) != expected:
             raise ValueError(f"gait.reward_scales must contain {sorted(expected)}")
+        if "calf_clearance_margin_m" in gait:
+            if float(scales["walk_calf_clearance"]) >= 0:
+                raise ValueError("walk_calf_clearance must be a negative cost scale")
         offsets = jp.asarray(
             [order.index(foot) / 4.0 for foot in ("FR", "FL", "RR", "RL")]
         )
@@ -115,6 +123,38 @@ def make_fixed_velocity_env(
                 self._post_init()
             else:
                 super().__init__(task="flat_terrain", config=config)
+
+            # These geoms still have valid poses in the feet-only training
+            # model, although their contacts are disabled there. Their capsule
+            # bounds provide a symmetric, collision-free training signal.
+            calf_ids = [
+                self.mj_model.geom(f"{foot}_calf2").id
+                for foot in ("fr", "fl", "rr", "rl")
+            ]
+            if any(
+                self.mj_model.geom_type[geom_id]
+                != mujoco.mjtGeom.mjGEOM_CAPSULE
+                for geom_id in calf_ids
+            ):
+                raise ValueError("calf2 clearance requires capsule geoms")
+            self._calf_geom_ids = jp.asarray(calf_ids)
+            self._calf_radii = jp.asarray(self.mj_model.geom_size[calf_ids, 0])
+            self._calf_half_lengths = jp.asarray(
+                self.mj_model.geom_size[calf_ids, 1]
+            )
+            self._floor_height_m = float(
+                self.mj_model.geom_pos[self._floor_geom_id, 2]
+            )
+
+        def calf_clearance(self, data):
+            """Lowest point of each calf2 capsule above the flat floor, in meters."""
+            axis_vertical = jp.abs(data.geom_xmat[self._calf_geom_ids, 2, 2])
+            return (
+                data.geom_xpos[self._calf_geom_ids, 2]
+                - axis_vertical * self._calf_half_lengths
+                - self._calf_radii
+                - self._floor_height_m
+            )
 
         def _desired_swing(self, data):
             phase = jp.mod(data.time / self._gait["period_s"], 1.0)
@@ -160,6 +200,12 @@ def make_fixed_velocity_env(
                 walk_multi_swing=jp.maximum(jp.sum(~contact) - 1, 0),
                 walk_no_support=(~jp.any(contact)).astype(jp.float32),
             )
+            if "calf_clearance_margin_m" in self._gait:
+                margin = self._gait["calf_clearance_margin_m"]
+                shortfall = jp.maximum(
+                    (margin - self.calf_clearance(data)) / margin, 0.0
+                )
+                rewards["walk_calf_clearance"] = jp.sum(shortfall)
             return rewards
 
         def reset(self, rng):

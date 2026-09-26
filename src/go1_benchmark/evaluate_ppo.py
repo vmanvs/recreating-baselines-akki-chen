@@ -179,6 +179,7 @@ def evaluate(args: argparse.Namespace) -> Path:
             "reward": state.reward,
             "terminated": state.done,
             "foot_contact": state.info["last_contact"],
+            "calf_clearance_m": env.calf_clearance(state.data),
             "nonfoot_ground_contact": has_nonfoot_ground_contact(state.data),
         }
         return (state, rng), sample
@@ -224,6 +225,7 @@ def evaluate(args: argparse.Namespace) -> Path:
     steady = trajectory_np["time_s"] >= args.warmup_s
     steady_rmse = float(np.sqrt(np.mean(velocity_error[steady] ** 2)))
     contacts = trajectory_np["foot_contact"][steady]
+    calf_clearance = trajectory_np["calf_clearance_m"][steady]
     front_contact = contacts[:, :2].astype(float)
     front_correlation = (
         float(np.corrcoef(front_contact.T)[0, 1])
@@ -266,6 +268,25 @@ def evaluate(args: argparse.Namespace) -> Path:
             np.mean(contacts == ~desired_swing)
         )
         gait_summary["schedule"] = gait_cfg
+    calf_summary = {
+        "foot_order": ["FR", "FL", "RR", "RL"],
+        "steady_minimum_m_by_leg": dict(
+            zip(
+                ("FR", "FL", "RR", "RL"),
+                [float(value) for value in np.min(calf_clearance, axis=0)],
+            )
+        ),
+        "steady_any_capsule_below_floor_fraction": float(
+            np.mean(np.any(calf_clearance < 0.0, axis=1))
+        ),
+        "method": "Capsule lower bounds sampled at the 50 Hz control rate; not contact force",
+    }
+    if "gait" in env_cfg and "calf_clearance_margin_m" in env_cfg["gait"]:
+        margin = float(env_cfg["gait"]["calf_clearance_margin_m"])
+        calf_summary["target_margin_m"] = margin
+        calf_summary["steady_any_below_margin_fraction"] = float(
+            np.mean(np.any(calf_clearance < margin, axis=1))
+        )
     finite = all(np.isfinite(value).all() for value in trajectory_np.values())
     contact_failure = bool(np.any(trajectory_np["nonfoot_ground_contact"]))
     terminated = bool(np.any(trajectory_np["terminated"]))
@@ -310,6 +331,7 @@ def evaluate(args: argparse.Namespace) -> Path:
         "full_collision_evaluation": True,
         "observation_noise_level": args.noise_level,
         "gait": gait_summary,
+        "calf_clearance": calf_summary,
         "upstream": document["upstream"],
     }
     _write_json(output / "summary.json", summary)

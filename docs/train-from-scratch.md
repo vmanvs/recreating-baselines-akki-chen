@@ -192,6 +192,53 @@ training and evaluation seeds if this first comparison looks promising.
 Re-evaluate the original `ppo-seed-000` checkpoint with this updated evaluator
 into a fresh output folder to obtain the same contact statistics for comparison.
 
+### Next ablation: calf clearance without changing collision dynamics
+
+The gait-aware seed-0 rollout reduced simultaneous front-foot swing but still
+registered 12 non-foot contact frames in 10 seconds of full-collision evaluation.
+CPU reconstruction identified `fl_calf2` on all 12 frames, typically 2-3 mm
+below the floor. The contacts repeat near the same phase of the 0.8 s gait
+cycle. The feet-only training XML retains calf capsule poses but disables their
+contacts, so the policy previously received no signal about this failure.
+
+The `gait_aware_calf_clearance` profile changes only the reward: it adds a
+symmetric geometric cost for all four `calf2` capsules. Their lowest point
+above the flat floor is computed from capsule center, axis, half-length, and
+radius. The cost is the summed fractional shortfall below a 15 mm margin,
+weighted by -2.0. In the saved gait-aware rollout, normal calf clearance was
+roughly 23 mm, while the failing front-left capsule reached about -3 mm. The
+margin gives the next policy a warning before contact. Training retains the
+feet-only collision model for the controlled comparison; this is not a
+force-based collision penalty or a guarantee of contact-free walking.
+
+On the Linux training device, run from random weights in a new output folder:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 uv run --no-sync go1-train-ppo \
+  --profile gait_aware_calf_clearance --seed 0 \
+  --num-envs 128 --num-eval-envs 4 --num-evals 21 \
+  --output outputs/ppo-gait-calf-clearance-seed-000
+```
+
+Do not resume the earlier gait-aware checkpoint for this ablation: that would
+test fine-tuning rather than the effect of this reward during training. The
+new profile keeps its policy observation shape and all other gait/PPO settings
+the same. Evaluate the result with full collisions:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 uv run --no-sync go1-evaluate-ppo \
+  --checkpoint outputs/ppo-gait-calf-clearance-seed-000/checkpoints \
+  --duration-s 10 --force-n 0 --warmup-s 2 \
+  --output outputs/verify-ppo-gait-calf-clearance-seed-000
+```
+
+The evaluator now records per-leg capsule clearance in `trajectory.npz` and
+steady-state clearance statistics in `summary.json`. Compare non-foot contact
+frames, minimum front-left calf clearance, speed error, support pattern, and
+cost of transport against the saved gait-aware run. Capsule clearance is
+sampled at the control rate; substep contacts and robustness still need
+separate evaluation after this first run.
+
 ## 5. Verify the saved policy
 
 ```bash
