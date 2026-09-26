@@ -32,6 +32,16 @@ def _load_config(path: Path, profile: str) -> tuple[dict[str, Any], dict[str, An
     return document, selected
 
 
+def _environment_for_profile(
+    document: dict[str, Any], profile: dict[str, Any]
+) -> dict[str, Any]:
+    """Keep the original baseline MDP unchanged unless a profile opts into gait."""
+    environment = dict(document["environment"])
+    if "gait" in profile:
+        environment["gait"] = profile["gait"]
+    return environment
+
+
 def _git_revision(root: Path) -> str | None:
     try:
         return subprocess.run(
@@ -78,7 +88,7 @@ def train(args: argparse.Namespace) -> Path:
             "Use --allow-cpu only when you explicitly want CPU training."
         )
     document, profile = _load_config(args.config, args.profile)
-    env_cfg = document["environment"]
+    env_cfg = _environment_for_profile(document, profile)
     command = tuple(float(value) for value in env_cfg["command_m_s_rad_s"])
     env = make_fixed_velocity_env(
         command=command,
@@ -225,8 +235,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--profile",
-        choices=("paper_budget_proxy", "playground_reference"),
         default="playground_reference",
+        help="Named profile in the experiment JSON (for example gait_aware_walk)",
     )
     parser.add_argument("--seed", type=int, required=True)
     parser.add_argument("--output", type=Path, required=True)

@@ -1,0 +1,162 @@
+{
+  "command_m_s_rad_s": [
+    0.5,
+    0.0,
+    0.0
+  ],
+  "created_utc": "2026-09-17T20:59:59.260740+00:00",
+  "environment": {
+    "action_scale_rad": 0.5,
+    "command_m_s_rad_s": [
+      0.5,
+      0.0,
+      0.0
+    ],
+    "control_dt_s": 0.02,
+    "episode_length_steps": 1000,
+    "evaluation_collisions": "full",
+    "implementation": "jax",
+    "kd": 0.5,
+    "kp": 35.0,
+    "observation_noise_level": 1.0,
+    "random_training_perturbations": false,
+    "simulation_dt_s": 0.004,
+    "training_collisions": "feet_only"
+  },
+  "hardware": {
+    "jax_backend": "gpu",
+    "jax_devices": [
+      "cuda:0"
+    ],
+    "platform": "Linux-7.0.11-76070011-generic-x86_64-with-glibc2.39",
+    "python": "3.11.16"
+  },
+  "initialization": "random",
+  "packages": {
+    "brax": "0.14.2",
+    "flax": "0.12.8",
+    "jax": "0.10.2",
+    "jaxlib": "0.10.2",
+    "mujoco": "3.12.0",
+    "mujoco-mjx": "3.12.0",
+    "optax": "0.2.8",
+    "orbax-checkpoint": "0.12.4",
+    "playground": "0.2.0"
+  },
+  "ppo": {
+    "action_repeat": 1,
+    "batch_size": 256,
+    "discounting": 0.97,
+    "entropy_cost": 0.01,
+    "episode_length": 1000,
+    "learning_rate": 0.0003,
+    "max_grad_norm": 1.0,
+    "network_factory": {
+      "policy_hidden_layer_sizes": [
+        512,
+        256,
+        128
+      ],
+      "policy_obs_key": "state",
+      "value_hidden_layer_sizes": [
+        512,
+        256,
+        128
+      ],
+      "value_obs_key": "privileged_state"
+    },
+    "normalize_observations": true,
+    "num_envs": 128,
+    "num_eval_envs": 4,
+    "num_evals": 21,
+    "num_minibatches": 32,
+    "num_resets_per_eval": 10,
+    "num_timesteps": 200000000,
+    "num_updates_per_batch": 4,
+    "reward_scaling": 1.0,
+    "unroll_length": 20
+  },
+  "profile": "playground_reference",
+  "project_git_revision": "dd0d721f7b90722d7ad68c1162c8d934bd9563ae",
+  "resolved_environment": {
+    "Kd": 0.5,
+    "Kp": 35.0,
+    "action_repeat": 1,
+    "action_scale": 0.5,
+    "command_config": {
+      "a": [
+        1.5,
+        0.8,
+        1.2
+      ],
+      "b": [
+        0.9,
+        0.25,
+        0.5
+      ]
+    },
+    "ctrl_dt": 0.02,
+    "episode_length": 1000,
+    "history_len": 1,
+    "impl": "jax",
+    "naconmax": 32768,
+    "njmax": 40,
+    "noise_config": {
+      "level": 1.0,
+      "scales": {
+        "gravity": 0.05,
+        "gyro": 0.2,
+        "joint_pos": 0.03,
+        "joint_vel": 1.5,
+        "linvel": 0.1
+      }
+    },
+    "pert_config": {
+      "enable": false,
+      "kick_durations": [
+        0.05,
+        0.2
+      ],
+      "kick_wait_times": [
+        1.0,
+        3.0
+      ],
+      "velocity_kick": [
+        0.0,
+        3.0
+      ]
+    },
+    "reward_config": {
+      "max_foot_height": 0.1,
+      "scales": {
+        "action_rate": -0.01,
+        "ang_vel_xy": -0.05,
+        "dof_pos_limits": -1.0,
+        "energy": -0.001,
+        "feet_air_time": 0.1,
+        "feet_clearance": -2.0,
+        "feet_height": -0.2,
+        "feet_slip": -0.1,
+        "lin_vel_z": -0.5,
+        "orientation": -5.0,
+        "pose": 0.5,
+        "stand_still": -1.0,
+        "termination": -1.0,
+        "torques": -0.0002,
+        "tracking_ang_vel": 0.5,
+        "tracking_lin_vel": 1.0
+      },
+      "tracking_sigma": 0.25
+    },
+    "sim_dt": 0.004,
+    "soft_joint_pos_limit_factor": 0.95
+  },
+  "resume_from": null,
+  "resume_semantics": "Restores policy, value and normalizer; optimizer and step count restart",
+  "seed": 0,
+  "upstream": {
+    "commit": "8a4b4642d8eba8a80ac99ed125cb62c16e1457ad",
+    "environment": "Go1JoystickFlatTerrain",
+    "repository": "https://github.com/google-deepmind/mujoco_playground.git"
+  }
+}

@@ -36,6 +36,26 @@
       "num_envs": 8192,
       "num_eval_envs": 128,
       "num_evals": 10
+    },
+    "gait_aware_walk": {
+      "description": "Independent four-beat walk experiment. Adds phase observations and gait rewards to the Playground PPO baseline; not the paper's unavailable controller.",
+      "num_timesteps": 200000000,
+      "learning_rate": 0.0003,
+      "num_envs": 8192,
+      "num_eval_envs": 128,
+      "num_evals": 21,
+      "gait": {
+        "period_s": 0.8,
+        "swing_fraction": 0.22,
+        "swing_order": ["RL", "FL", "RR", "FR"],
+        "target_swing_height_m": 0.08,
+        "reward_scales": {
+          "walk_contact_match": 2.0,
+          "walk_swing_height": 1.0,
+          "walk_multi_swing": -1.5,
+          "walk_no_support": -2.0
+        }
+      }
     }
   }
 }

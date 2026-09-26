@@ -36,7 +36,10 @@ def evaluate(args: argparse.Namespace) -> Path:
     import jax
     import jax.numpy as jp
     import numpy as np
+    from brax.training import networks as brax_networks
+    from brax.training.acme import running_statistics
     from brax.training.agents.ppo import checkpoint as ppo_checkpoint
+    from brax.training.agents.ppo import networks as ppo_networks
 
     checkpoint = _latest_checkpoint(args.checkpoint.resolve())
     if not checkpoint.exists():
@@ -57,7 +60,9 @@ def evaluate(args: argparse.Namespace) -> Path:
     document, _ = _load_config(
         manifest_path.parent / "experiment.json", manifest["profile"]
     )
-    env_cfg = document["environment"]
+    # The training manifest holds the effective environment, including any
+    # profile-specific gait settings that changed the network input shape.
+    env_cfg = manifest["environment"]
     command = tuple(float(value) for value in env_cfg["command_m_s_rad_s"])
     env = make_fixed_velocity_env(
         command=command,
@@ -68,9 +73,54 @@ def evaluate(args: argparse.Namespace) -> Path:
         settings=env_cfg,
     )
 
-    # Reconstruct the trained network and its normalizer from Brax's own saved
-    # checkpoint metadata, without initializing a batched training environment.
-    inference = jax.jit(ppo_checkpoint.load_policy(str(checkpoint), deterministic=True))
+    # The pinned Brax loader looks up None as a kernel initializer and fails.
+    # Decode the saved architecture ourselves, then restore the actual weights
+    # through Brax. This leaves the checkpoint untouched.
+    saved_network = json.loads(
+        (checkpoint / "ppo_network_config.json").read_text(encoding="utf-8")
+    )
+    if int(saved_network["action_size"]) != env.action_size:
+        raise ValueError("Checkpoint action size differs from evaluation environment.")
+    observation_size = env.observation_size
+    for key, spec in saved_network["observation_size"].items():
+        saved_shape = tuple(spec["shape"])
+        current_size = observation_size[key]
+        current_shape = (
+            (current_size,) if isinstance(current_size, int) else tuple(current_size)
+        )
+        if saved_shape != current_shape:
+            raise ValueError(
+                f"Checkpoint observation size differs for {key}: "
+                f"{saved_shape} != {current_shape}"
+            )
+    network_kwargs = saved_network["network_factory_kwargs"]
+    network_kwargs["activation"] = brax_networks.ACTIVATION[
+        network_kwargs["activation"]
+    ]
+    for name in (
+        "policy_network_kernel_init_fn",
+        "value_network_kernel_init_fn",
+        "mean_kernel_init_fn",
+    ):
+        if network_kwargs.get(name) is not None:
+            network_kwargs[name] = brax_networks.KERNEL_INITIALIZER[
+                network_kwargs[name]
+            ]
+    preprocess = (
+        running_statistics.normalize
+        if saved_network["normalize_observations"]
+        else lambda observation, params: observation
+    )
+    network = ppo_networks.make_ppo_networks(
+        observation_size,
+        env.action_size,
+        preprocess_observations_fn=preprocess,
+        **network_kwargs,
+    )
+    params = ppo_checkpoint.load(str(checkpoint))
+    inference = jax.jit(
+        ppo_networks.make_inference_fn(network)(params, deterministic=True)
+    )
 
     torso_id = env.mj_model.body("trunk").id
     robot_mass_kg = float(env.mj_model.body_subtreemass[torso_id])
@@ -128,6 +178,7 @@ def evaluate(args: argparse.Namespace) -> Path:
             "xfrc_applied": state.data.xfrc_applied[torso_id, :3],
             "reward": state.reward,
             "terminated": state.done,
+            "foot_contact": state.info["last_contact"],
             "nonfoot_ground_contact": has_nonfoot_ground_contact(state.data),
         }
         return (state, rng), sample
@@ -172,6 +223,49 @@ def evaluate(args: argparse.Namespace) -> Path:
     )
     steady = trajectory_np["time_s"] >= args.warmup_s
     steady_rmse = float(np.sqrt(np.mean(velocity_error[steady] ** 2)))
+    contacts = trajectory_np["foot_contact"][steady]
+    front_contact = contacts[:, :2].astype(float)
+    front_correlation = (
+        float(np.corrcoef(front_contact.T)[0, 1])
+        if np.all(np.std(front_contact, axis=0) > 0)
+        else None
+    )
+    gait_summary = {
+        "foot_order": ["FR", "FL", "RR", "RL"],
+        "steady_front_contact_correlation": front_correlation,
+        "steady_front_pair_airborne_fraction": float(
+            np.mean(~contacts[:, 0] & ~contacts[:, 1])
+        ),
+        "steady_all_feet_airborne_fraction": float(
+            np.mean(~np.any(contacts, axis=1))
+        ),
+        "steady_exactly_one_swing_fraction": float(
+            np.mean(np.sum(~contacts, axis=1) == 1)
+        ),
+        "steady_per_foot_airborne_fraction": dict(
+            zip(
+                ("FR", "FL", "RR", "RL"),
+                [float(value) for value in np.mean(~contacts, axis=0)],
+            )
+        ),
+    }
+    if "gait" in env_cfg:
+        gait_cfg = env_cfg["gait"]
+        order = gait_cfg["swing_order"]
+        offsets = np.asarray(
+            [order.index(foot) / 4.0 for foot in ("FR", "FL", "RR", "RL")]
+        )
+        phase = np.mod(
+            trajectory_np["time_s"][steady] / gait_cfg["period_s"], 1.0
+        )
+        desired_swing = (
+            np.mod(phase[:, None] - offsets[None, :], 1.0)
+            < gait_cfg["swing_fraction"]
+        )
+        gait_summary["steady_scheduled_contact_agreement"] = float(
+            np.mean(contacts == ~desired_swing)
+        )
+        gait_summary["schedule"] = gait_cfg
     finite = all(np.isfinite(value).all() for value in trajectory_np.values())
     contact_failure = bool(np.any(trajectory_np["nonfoot_ground_contact"]))
     terminated = bool(np.any(trajectory_np["terminated"]))
@@ -215,6 +309,7 @@ def evaluate(args: argparse.Namespace) -> Path:
         "control_dt_s": dt_s,
         "full_collision_evaluation": True,
         "observation_noise_level": args.noise_level,
+        "gait": gait_summary,
         "upstream": document["upstream"],
     }
     _write_json(output / "summary.json", summary)

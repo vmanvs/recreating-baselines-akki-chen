@@ -143,6 +143,55 @@ CUDA_VISIBLE_DEVICES=0 uv run --no-sync go1-train-ppo \
 This applies selected reported settings to our public environment, not the
 authors' complete configuration. Keep these results separate from longer runs.
 
+### Train a separate gait-aware walking policy
+
+The `gait_aware_walk` profile is an experimental PPO objective for a staggered
+four-beat walk at the same 0.5 m/s command. It retains the reference PPO budget
+and feet-only training collisions, but changes the MDP: the actor and critic
+observe a two-component gait phase, and the reward favors a scheduled swing
+sequence (rear-left, front-left, rear-right, front-right). Each foot has a
+0.176 s swing window in a 0.8 s cycle, leaving brief all-feet-support phases.
+The additional rewards encourage scheduled foot contacts and swing height and
+penalize multiple simultaneous swings or no supporting feet. These settings
+are hypotheses to test, not settings attributed to the source paper.
+
+On Pop!_OS or Ubuntu with a JAX-visible NVIDIA GPU, install the locked
+environment as in section 2, then start a *new* run from random weights:
+
+```bash
+uv sync --locked --python 3.11 --extra rl --extra cuda
+uv run --no-sync python -c "import jax; print(jax.devices()); assert jax.default_backend() == 'gpu'"
+CUDA_VISIBLE_DEVICES=0 uv run --no-sync go1-train-ppo \
+  --profile gait_aware_walk --seed 0 \
+  --num-envs 128 --num-eval-envs 4 --num-evals 21 \
+  --output outputs/ppo-gait-aware-seed-000
+```
+
+Use the same environment-count overrides as the earlier reference run for a
+clean comparison, provided that machine has enough GPU memory. The 200-million
+step request may overshoot a batch boundary. This new network has two extra
+observation features, so do not `--resume` from `ppo-seed-000`; that checkpoint
+is architecturally incompatible. Keep both run folders intact.
+
+After training, evaluate the saved checkpoint with full collisions:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 uv run --no-sync go1-evaluate-ppo \
+  --checkpoint outputs/ppo-gait-aware-seed-000/checkpoints \
+  --duration-s 20 --force-n 0 --warmup-s 2 \
+  --output outputs/verify-ppo-gait-aware-seed-000
+```
+
+Compare both runs' `summary.json` gait fields, especially front-foot contact
+correlation, the fractions of simultaneous front-foot swing and complete
+flight, per-foot swing fractions, and speed tracking. A phase-aligned contact
+score is recorded only for the gait-aware run. Render both rollouts and inspect
+leg motion, body pitch, and calf contacts. A single seed or rollout is an
+engineering probe, not evidence that a gait change generalizes. Run multiple
+training and evaluation seeds if this first comparison looks promising.
+Re-evaluate the original `ppo-seed-000` checkpoint with this updated evaluator
+into a fresh output folder to obtain the same contact statistics for comparison.
+
 ## 5. Verify the saved policy
 
 ```bash
@@ -183,6 +232,24 @@ World-frame directions: 0 for +x, 180 for -x, 90 for +y, 270 for -y.
 This rectangular pulse has 30 N s impulse. Match the source waveform before
 calling it a matched reproduction. Rollout continues after failure to record
 recovery; observed body contact remains flagged.
+
+## Render a saved evaluation
+
+After an evaluation has written `trajectory.npz`, render its recorded poses to
+a 50 fps MP4. This replays the saved rollout; it does not rerun the policy.
+
+```bash
+uv sync --locked --python 3.11 --extra rl --extra cuda --extra render
+uv run --no-sync python scripts/render_ppo_rollout.py \
+  --run ppo-seed-000 \
+  --evaluation outputs/verify-ppo-seed-000 \
+  --output outputs/verify-ppo-seed-000/rollout.mp4
+```
+
+The renderer follows the robot and marks frames where the MJX evaluator saw
+non-foot ground contact. Its JSON report reconstructs contact geometry and
+depth from the recorded poses using CPU MuJoCo. These reconstructed contact
+details can differ from the original MJX calculation.
 
 ## Native PowerShell CPU alternative
 

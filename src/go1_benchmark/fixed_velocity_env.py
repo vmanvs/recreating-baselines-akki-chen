@@ -1,8 +1,9 @@
-"""MuJoCo Playground Go1 environment with the paper's fixed command.
+"""MuJoCo Playground Go1 environment with a fixed velocity command.
 
 Training uses Playground's feet-only collision model for accelerator throughput.
 Evaluation can select the full-collision model so a non-foot ground contact can
-be counted as failure. Both modes retain the same state and action dimensions.
+be counted as failure. A separate gait-aware profile adds phase observations
+and rewards; the original baseline retains its existing observation dimensions.
 """
 
 from __future__ import annotations
@@ -57,10 +58,38 @@ def make_fixed_velocity_env(
     consts = modules["consts"]
     joystick = modules["joystick"]
     fixed_command = jp.asarray(command)
+    gait = settings.get("gait") if settings else None
+    if gait is not None:
+        order = tuple(gait["swing_order"])
+        if set(order) != {"FR", "FL", "RR", "RL"} or len(order) != 4:
+            raise ValueError("gait.swing_order must contain each foot exactly once")
+        if float(gait["period_s"]) <= 0:
+            raise ValueError("gait.period_s must be positive")
+        if not 0 < float(gait["swing_fraction"]) <= 0.25:
+            raise ValueError("gait.swing_fraction must be in (0, 0.25]")
+        if float(gait["target_swing_height_m"]) <= 0:
+            raise ValueError("gait.target_swing_height_m must be positive")
+        scales = gait["reward_scales"]
+        expected = {
+            "walk_contact_match",
+            "walk_swing_height",
+            "walk_multi_swing",
+            "walk_no_support",
+        }
+        if set(scales) != expected:
+            raise ValueError(f"gait.reward_scales must contain {sorted(expected)}")
+        offsets = jp.asarray(
+            [order.index(foot) / 4.0 for foot in ("FR", "FL", "RR", "RL")]
+        )
 
     class FixedVelocityGo1(joystick.Joystick):
         def __init__(self):
             config = joystick.default_config()
+            self._gait = gait
+            if gait is not None:
+                self._gait_offsets = offsets
+                for name, weight in scales.items():
+                    config.reward_config.scales[name] = float(weight)
             for source, target in {
                 "simulation_dt_s": "sim_dt",
                 "control_dt_s": "ctrl_dt",
@@ -86,6 +115,52 @@ def make_fixed_velocity_env(
                 self._post_init()
             else:
                 super().__init__(task="flat_terrain", config=config)
+
+        def _desired_swing(self, data):
+            phase = jp.mod(data.time / self._gait["period_s"], 1.0)
+            foot_phase = jp.mod(phase - self._gait_offsets, 1.0)
+            return foot_phase < self._gait["swing_fraction"]
+
+        def _get_obs(self, data, info):
+            obs = super()._get_obs(data, info)
+            if self._gait is None:
+                return obs
+            phase = 2.0 * jp.pi * data.time / self._gait["period_s"]
+            phase_obs = jp.asarray([jp.sin(phase), jp.cos(phase)])
+            return {
+                "state": jp.hstack((obs["state"], phase_obs)),
+                "privileged_state": jp.hstack(
+                    (obs["privileged_state"], phase_obs)
+                ),
+            }
+
+        def _get_reward(
+            self, data, action, info, metrics, done, first_contact, contact
+        ):
+            rewards = super()._get_reward(
+                data, action, info, metrics, done, first_contact, contact
+            )
+            if self._gait is None:
+                return rewards
+            desired_swing = self._desired_swing(data)
+            foot_height = data.site_xpos[self._feet_site_id, 2]
+            rewards.update(
+                walk_contact_match=jp.mean(contact == ~desired_swing),
+                walk_swing_height=jp.sum(
+                    jp.where(
+                        desired_swing,
+                        jp.clip(
+                            foot_height / self._gait["target_swing_height_m"],
+                            0.0,
+                            1.0,
+                        ),
+                        0.0,
+                    )
+                ),
+                walk_multi_swing=jp.maximum(jp.sum(~contact) - 1, 0),
+                walk_no_support=(~jp.any(contact)).astype(jp.float32),
+            )
+            return rewards
 
         def reset(self, rng):
             state = super().reset(rng)

@@ -3,7 +3,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from go1_benchmark.evaluate_ppo import _latest_checkpoint
-from go1_benchmark.train_ppo import DEFAULT_CONFIG, _load_config
+from go1_benchmark.train_ppo import (
+    DEFAULT_CONFIG,
+    _environment_for_profile,
+    _load_config,
+)
 
 
 class TrainingConfigTests(unittest.TestCase):
@@ -22,6 +26,15 @@ class TrainingConfigTests(unittest.TestCase):
     def test_unknown_profile_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "Unknown profile"):
             _load_config(DEFAULT_CONFIG, "not-a-profile")
+
+    def test_gait_profile_is_separate_from_reference_environment(self):
+        document, reference = _load_config(DEFAULT_CONFIG, "playground_reference")
+        _, gait = _load_config(DEFAULT_CONFIG, "gait_aware_walk")
+        self.assertNotIn("gait", _environment_for_profile(document, reference))
+        effective = _environment_for_profile(document, gait)
+        self.assertEqual(effective["gait"]["swing_order"], ["RL", "FL", "RR", "FR"])
+        self.assertLess(effective["gait"]["swing_fraction"], 0.25)
+        self.assertNotIn("gait", document["environment"])
 
     def test_latest_checkpoint_uses_highest_numeric_directory(self):
         with TemporaryDirectory() as directory:

@@ -20,6 +20,7 @@ rl = [
   "playground @ git+https://github.com/google-deepmind/mujoco_playground.git@8a4b4642d8eba8a80ac99ed125cb62c16e1457ad",
 ]
 cuda = ["jax[cuda12]; sys_platform == 'linux'"]
+render = ["imageio-ffmpeg==0.6.0", "mediapy==1.2.7", "pillow==12.3.0"]
 
 [project.scripts]
 go1-train-ppo = "go1_benchmark.train_ppo:main"
