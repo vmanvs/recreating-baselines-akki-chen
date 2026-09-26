@@ -31,3 +31,6 @@ checkpoints/
 logs/
 wandb/
 persist/
+
+# Keep the unpacked IEEE conference template local; retain the source ZIP.
+/conference-latex-template/
