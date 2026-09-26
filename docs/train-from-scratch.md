@@ -202,9 +202,10 @@ cycle. The feet-only training XML retains calf capsule poses but disables their
 contacts, so the policy previously received no signal about this failure.
 
 The `gait_aware_calf_clearance` profile changes only the reward: it adds a
-symmetric geometric cost for all four `calf2` capsules. Their lowest point
-above the flat floor is computed from capsule center, axis, half-length, and
-radius. The cost is the summed fractional shortfall below a 15 mm margin,
+symmetric geometric cost for all four `calf2` capsules. The feet-only model
+has calf bodies but no named `calf2` geoms, so the two pinned capsule endpoints
+are transformed from each calf body pose and the radius is subtracted. The
+cost is the summed fractional shortfall below a 15 mm margin,
 weighted by -2.0. In the saved gait-aware rollout, normal calf clearance was
 roughly 23 mm, while the failing front-left capsule reached about -3 mm. The
 margin gives the next policy a warning before contact. Training retains the

@@ -11,6 +11,14 @@ from __future__ import annotations
 from typing import Any
 
 
+def _capsule_floor_clearance(
+    body_height, body_rotation_z_row, local_endpoints, radius, floor_height
+):
+    """Lowest world-space capsule point, using array operations shared by NumPy/JAX."""
+    endpoint_heights = body_height[:, None] + body_rotation_z_row @ local_endpoints.T
+    return endpoint_heights.min(axis=-1) - radius - floor_height
+
+
 def _imports() -> dict[str, Any]:
     """Import optional accelerator dependencies only when this backend is used."""
     try:
@@ -49,7 +57,6 @@ def make_fixed_velocity_env(
     """
     modules = _imports()
     jp = modules["jp"]
-    import mujoco
     from mujoco import mjx
     from mujoco_playground._src import mjx_env
 
@@ -124,36 +131,31 @@ def make_fixed_velocity_env(
             else:
                 super().__init__(task="flat_terrain", config=config)
 
-            # These geoms still have valid poses in the feet-only training
-            # model, although their contacts are disabled there. Their capsule
-            # bounds provide a symmetric, collision-free training signal.
-            calf_ids = [
-                self.mj_model.geom(f"{foot}_calf2").id
-                for foot in ("fr", "fl", "rr", "rl")
-            ]
-            if any(
-                self.mj_model.geom_type[geom_id]
-                != mujoco.mjtGeom.mjGEOM_CAPSULE
-                for geom_id in calf_ids
-            ):
-                raise ValueError("calf2 clearance requires capsule geoms")
-            self._calf_geom_ids = jp.asarray(calf_ids)
-            self._calf_radii = jp.asarray(self.mj_model.geom_size[calf_ids, 0])
-            self._calf_half_lengths = jp.asarray(
-                self.mj_model.geom_size[calf_ids, 1]
+            # The feet-only XML has the calf bodies, but its calf2 geoms are
+            # unnamed. The pinned full-collision XML defines calf2 by fromto
+            # endpoints (0.02, 0, -0.13) and (0, 0, -0.2), radius 0.01 m.
+            self._calf_body_ids = jp.asarray(
+                [
+                    self.mj_model.body(f"{foot}_calf").id
+                    for foot in ("FR", "FL", "RR", "RL")
+                ]
             )
+            self._calf_local_endpoints = jp.asarray(
+                ((0.02, 0.0, -0.13), (0.0, 0.0, -0.2))
+            )
+            self._calf_radius_m = 0.01
             self._floor_height_m = float(
                 self.mj_model.geom_pos[self._floor_geom_id, 2]
             )
 
         def calf_clearance(self, data):
             """Lowest point of each calf2 capsule above the flat floor, in meters."""
-            axis_vertical = jp.abs(data.geom_xmat[self._calf_geom_ids, 2, 2])
-            return (
-                data.geom_xpos[self._calf_geom_ids, 2]
-                - axis_vertical * self._calf_half_lengths
-                - self._calf_radii
-                - self._floor_height_m
+            return _capsule_floor_clearance(
+                data.xpos[self._calf_body_ids, 2],
+                data.xmat[self._calf_body_ids, 2, :],
+                self._calf_local_endpoints,
+                self._calf_radius_m,
+                self._floor_height_m,
             )
 
         def _desired_swing(self, data):
