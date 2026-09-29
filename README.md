@@ -33,3 +33,12 @@ live in `sim_results`. New PPO runs should use separate output directories.
 This is an independent reconstruction of the benchmark associated with
 [DOI 10.1109/ACCESS.2025.3582523](https://doi.org/10.1109/ACCESS.2025.3582523).
 The authors' unavailable controller implementation is not claimed to be reproduced exactly.
+
+## Actual MJPC baseline
+
+See [Build and evaluate MJPC](docs/mjpc.md). The new `mjpc/` C++ task and
+`go1-evaluate-mjpc` command use upstream MJPC's predictive-sampling planner,
+not the older `MPCController` in `controllers.py`. They match the PPO
+full-collision model and PD settings. Planner/task settings are independently
+chosen starting values, not recovered author settings or validated results.
+Build and run on Linux or WSL. PPO training and legacy controllers are unchanged.

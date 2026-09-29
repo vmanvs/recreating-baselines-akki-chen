@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "description": "Independent MJPC predictive-sampling Go1 baseline, matched to PPO evaluation physics. Starting settings, not validated or the authors' settings.",
+  "environment": {
+    "command_m_s_rad_s": [0.5, 0.0, 0.0],
+    "simulation_dt_s": 0.004,
+    "control_dt_s": 0.02,
+    "kp": 35.0,
+    "kd": 0.5,
+    "evaluation_collisions": "full"
+  },
+  "planner": {
+    "horizon_s": 0.4,
+    "samples": 64,
+    "spline_points": 5,
+    "interpolation": "linear",
+    "exploration_fraction": 0.08,
+    "iterations_per_control": 2,
+    "threads": 4
+  },
+  "task": {
+    "target_height_m": 0.278,
+    "gait_period_s": 0.8,
+    "swing_fraction": 0.22,
+    "swing_height_m": 0.08,
+    "swing_order": ["RL", "FL", "RR", "FR"],
+    "calf_clearance_margin_m": 0.015,
+    "weights": {
+      "Height": 10.0,
+      "Velocity": 6.0,
+      "Upright": 5.0,
+      "Heading": 1.0,
+      "Effort": 0.05,
+      "Posture": 0.2,
+      "Gait": 3.0,
+      "CalfClearance": 1.0
+    }
+  }
+}

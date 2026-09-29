@@ -32,5 +32,8 @@ logs/
 wandb/
 persist/
 
+# Native MJPC builds and downloaded C++ dependencies
+.build/
+
 # Keep the unpacked IEEE conference template local; retain the source ZIP.
 /conference-latex-template/

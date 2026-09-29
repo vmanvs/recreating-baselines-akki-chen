@@ -1,0 +1,97 @@
+{
+  "environment": {
+    "action_scale_rad": 0.5,
+    "command_m_s_rad_s": [
+      0.5,
+      0.0,
+      0.0
+    ],
+    "control_dt_s": 0.02,
+    "episode_length_steps": 1000,
+    "evaluation_collisions": "full",
+    "implementation": "jax",
+    "kd": 0.5,
+    "kp": 35.0,
+    "observation_noise_level": 1.0,
+    "random_training_perturbations": false,
+    "simulation_dt_s": 0.004,
+    "training_collisions": "feet_only"
+  },
+  "profiles": {
+    "gait_aware_calf_clearance": {
+      "description": "Four-beat walk ablation with a symmetric calf2 capsule floor-clearance cost. Keeps the gait schedule, PPO settings, and feet-only training dynamics unchanged.",
+      "gait": {
+        "calf_clearance_margin_m": 0.015,
+        "period_s": 0.8,
+        "reward_scales": {
+          "walk_calf_clearance": -2.0,
+          "walk_contact_match": 2.0,
+          "walk_multi_swing": -1.5,
+          "walk_no_support": -2.0,
+          "walk_swing_height": 1.0
+        },
+        "swing_fraction": 0.22,
+        "swing_order": [
+          "RL",
+          "FL",
+          "RR",
+          "FR"
+        ],
+        "target_swing_height_m": 0.08
+      },
+      "learning_rate": 0.0003,
+      "num_envs": 8192,
+      "num_eval_envs": 128,
+      "num_evals": 21,
+      "num_timesteps": 200000000
+    },
+    "gait_aware_walk": {
+      "description": "Independent four-beat walk experiment. Adds phase observations and gait rewards to the Playground PPO baseline; not the paper's unavailable controller.",
+      "gait": {
+        "period_s": 0.8,
+        "reward_scales": {
+          "walk_contact_match": 2.0,
+          "walk_multi_swing": -1.5,
+          "walk_no_support": -2.0,
+          "walk_swing_height": 1.0
+        },
+        "swing_fraction": 0.22,
+        "swing_order": [
+          "RL",
+          "FL",
+          "RR",
+          "FR"
+        ],
+        "target_swing_height_m": 0.08
+      },
+      "learning_rate": 0.0003,
+      "num_envs": 8192,
+      "num_eval_envs": 128,
+      "num_evals": 21,
+      "num_timesteps": 200000000
+    },
+    "paper_budget_proxy": {
+      "clipping_epsilon": 0.2,
+      "description": "Uses the paper's reported total-step, learning-rate, and clipping values on the public Go1 MDP. This is not the authors' unavailable SB3 environment.",
+      "learning_rate": 0.00059,
+      "num_envs": 1024,
+      "num_eval_envs": 128,
+      "num_evals": 5,
+      "num_timesteps": 1000000
+    },
+    "playground_reference": {
+      "description": "Uses MuJoCo Playground's tuned Go1 PPO configuration and training budget.",
+      "learning_rate": 0.0003,
+      "num_envs": 8192,
+      "num_eval_envs": 128,
+      "num_evals": 10,
+      "num_timesteps": 200000000
+    }
+  },
+  "schema_version": 1,
+  "upstream": {
+    "commit": "8a4b4642d8eba8a80ac99ed125cb62c16e1457ad",
+    "environment": "Go1JoystickFlatTerrain",
+    "repository": "https://github.com/google-deepmind/mujoco_playground.git"
+  }
+}

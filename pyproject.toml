@@ -25,6 +25,7 @@ render = ["imageio-ffmpeg==0.6.0", "mediapy==1.2.7", "pillow==12.3.0"]
 [project.scripts]
 go1-train-ppo = "go1_benchmark.train_ppo:main"
 go1-evaluate-ppo = "go1_benchmark.evaluate_ppo:main"
+go1-evaluate-mjpc = "go1_benchmark.evaluate_mjpc:main"
 
 [dependency-groups]
 dev = [
