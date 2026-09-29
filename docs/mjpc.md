@@ -48,6 +48,11 @@ steps, simulation time, elapsed time, speed and planner latency every simulated
 second. This is synchronous offline evaluation: simulation waits for planning.
 A completed run does not imply the controller meets a real-time deadline.
 Add `--require-pass` when you want a failed nominal test to exit nonzero.
+Add `--require-walking` to also require gait-phase agreement >= 85%, exactly
+one swinging leg in >= 65% of steady samples, and airborne-all-feet <= 1%.
+These are development acceptance criteria, not measures copied from the paper.
+`planner_budget_pass` separately requires zero observed planner deadline misses.
+It does not verify real-time execution of this synchronous offline simulation.
 
 ```bash
 python -m go1_benchmark.evaluate_mjpc \
@@ -74,7 +79,7 @@ repository's Menagerie checkout. It does not silently download assets.
 
 ## Task and planner settings
 
-`configs/mjpc_go1.json` contains all starting settings. The controller directly
+`configs/mjpc_go1.json` contains the development-validated settings. The controller directly
 optimizes position-target splines; there is no sinusoidal joint-action generator
 or learned policy inside MJPC. A four-beat foot-height reference is a task prior.
 Disabling `Gait`, `Posture` or `CalfClearance` weights is an explicit task ablation,
@@ -91,13 +96,51 @@ terms to support the same walking objective as the gait-aware PPO policy.
 | Posture | Joint positions minus home pose |
 | Gait | Foot sphere-center height minus radius and swing-height reference |
 | CalfClearance | Positive deficit below 15 mm calf capsule clearance |
+| Balance | Capture-point proxy, using root linear velocity, minus average foot XY position |
+| AngularVelocity | Free-joint body angular velocity |
+| FootPlacement | Body-frame foot XY error from the command-dependent four-beat stride |
+| SupportForce | Swing-foot load, or stance-foot load deficit below 10% of body weight |
+| NonfootCollision | Largest non-foot contact proximity/penetration penalty, with a 2 mm margin and 10 mm scale |
 
 MJPC applies its quadratic norm to each residual vector and weights the terms.
-Default horizon is 0.4 s, 64 candidates, 5 linearly interpolated spline nodes,
-2 sampling iterations per 20 ms control interval, and 4 worker threads.
-Exploration is 0.08 times each actuator's full control-range width, not 0.08 rad.
-These are starting values requiring locomotion validation and tuning. Freeze
+Default horizon is 0.24 s, 128 candidates, 3 linearly interpolated spline nodes,
+4 sampling iterations per 20 ms control interval, and 4 worker threads.
+Exploration standard deviation is 0.03 times HALF each actuator's full
+control-range width, not 0.03 rad. This corrects the original documentation.
+These values passed short development validation, not a final benchmark. Freeze
 chosen settings before collecting reported test results; do not tune on tests.
+
+`configs/mjpc_go1_development.json` preserves the exact confirmation candidate,
+with the five additional terms enabled. The default now uses the same physical
+and task settings. The original settings are archived as
+`configs/mjpc_go1_initial.json` and give those new terms zero weight. Rebuild the native
+library after updating: the task now has 58 residual entries and 13 cost terms.
+There is no handwritten joint-action generator in either configuration.
+The added foot-placement reference and support schedule are explicit task
+priors, not recovered author settings. See `docs/mjpc-tuning.md` for outcomes.
+
+The candidate uses a 0.24 s horizon, 128 candidates, 3 linear spline nodes,
+4 optimization iterations, and exploration 0.03. Its foot-height and XY stride
+amplitudes ramp up during the first second. The velocity cost still targets
+0.5 m/s from the start. Do not replace this with a lower command to pass a test.
+
+For development confirmation, not paper data:
+
+```bash
+python scripts/tune_mjpc.py \
+  --configs configs/mjpc_go1_development.json \
+  --duration-s 12 --repeats 3 --initial-joint-noise-rad 0.01 \
+  --require-walking \
+  --output outputs/mjpc-development-confirm
+```
+
+Replay a recorded evaluation, without rerunning the controller:
+
+```bash
+MUJOCO_GL=egl python scripts/render_mjpc_rollout.py \
+  --evaluation outputs/mjpc-development-confirm/mjpc_go1_development-repeat-00 \
+  --output outputs/mjpc-development-confirm/replay.mp4
+```
 
 ## Outputs and comparison limits
 
@@ -106,6 +149,10 @@ Each run saves `summary.json`, `manifest.json`, effective `experiment.json`,
 library and model hashes, MuJoCo version, arguments and RNG limitations.
 Trajectories contain all 12 actual actuator forces, positions, velocities,
 position commands, instantaneous contacts, calf clearance and planner latency.
+They also record foot world positions and normal forces, native task residuals,
+and per-term weighted costs. Those costs use MJPC's 0.5 r^T r quadratic norm.
+Summary records the first non-foot contact time and implicated geometries at
+physics-rate sampling, which helps distinguish calf rubbing from a body fall.
 Summary includes speed error, distance, contact failure, recovery time and CoT.
 
 Two energy estimates are recorded:
@@ -139,8 +186,9 @@ GO1_MJPC_LIBRARY="$PWD/.build/mjpc/libgo1_mjpc.so" \
   python -m pytest tests/test_mjpc.py -q
 ```
 
-The native test compares all 40 C++ residual entries against an independent
-Python implementation at four gait phases and exercises actual MJPC planning.
+The native test compares all 58 C++ residual entries against an independent
+Python implementation at four gait phases, with pose/velocity perturbations,
+and an intentionally low collision pose. It also exercises actual planning.
 Without that environment variable the native test is explicitly skipped;
 passing the configuration tests alone is not confirmation of a working build.
 

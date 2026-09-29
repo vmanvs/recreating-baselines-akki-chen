@@ -1,0 +1,68 @@
+{
+  "scope": "Development confirmation only, not held-out paper data",
+  "config": "configs/mjpc_go1_development.json",
+  "config_sha256": "81e5ee170e0011c63372531a5d6d3a088644e4371c091319de352d8727aded76",
+  "library_sha256": "621a5b0727f3477c507aa03864f8df74d21544eb178a50434455fa293528fe9a",
+  "mjpc_revision": "ff572a21e7c2bf9fda62e1862a758da7e9a8719b",
+  "mujoco": "3.12.0",
+  "duration_s": 12,
+  "warmup_s": 2,
+  "command_m_s": 0.5,
+  "initial_joint_noise_rad": 0.01,
+  "seed_scope": "Initial joint perturbations only; upstream sampling unseeded",
+  "all_nominal_pass": true,
+  "all_walking_pass": true,
+  "planner_budget_pass": false,
+  "runs": [
+    {
+      "repeat": 0,
+      "speed_m_s": 0.39482383401996324,
+      "rmse_m_s": 0.1362933196822468,
+      "nonfoot_contact": false,
+      "phase_match": 0.8782435129740519,
+      "one_swing_fraction": 0.7005988023952096,
+      "airborne_fraction": 0.001996007984031936,
+      "minimum_calf_clearance_m": 0.0068391181315156455,
+      "cot_50_hz": 1.2420294615303005,
+      "cot_250_hz": 1.452329827959257,
+      "planning_mean_ms": 230.3907392266895,
+      "planning_p95_ms": 256.6880949997539
+    },
+    {
+      "repeat": 1,
+      "speed_m_s": 0.3901739256001237,
+      "rmse_m_s": 0.14452326346311178,
+      "nonfoot_contact": false,
+      "phase_match": 0.8852295409181636,
+      "one_swing_fraction": 0.720558882235529,
+      "airborne_fraction": 0,
+      "minimum_calf_clearance_m": 0.0020535233805922346,
+      "cot_50_hz": 1.283047411292146,
+      "cot_250_hz": 1.4892576175093615,
+      "planning_mean_ms": 235.27237304659138,
+      "planning_p95_ms": 260.5684750492401
+    },
+    {
+      "repeat": 2,
+      "speed_m_s": 0.40113155484169827,
+      "rmse_m_s": 0.13185039081764227,
+      "nonfoot_contact": false,
+      "phase_match": 0.876746506986028,
+      "one_swing_fraction": 0.6906187624750499,
+      "airborne_fraction": 0.001996007984031936,
+      "minimum_calf_clearance_m": 0.003154866781103641,
+      "cot_50_hz": 1.282991526300556,
+      "cot_250_hz": 1.4899456459543219,
+      "planning_mean_ms": 231.19068579003093,
+      "planning_p95_ms": 253.67610785078793
+    }
+  ],
+  "raw_data": "D:/Code/recreating-baseline/outputs/mjpc-tuning-2026-09-29/confirmation-01",
+  "limitations": [
+    "Only three short repeats",
+    "Speed below the 0.5 m/s command",
+    "Every measured planner call exceeds 20 ms",
+    "Synchronous offline simulation",
+    "PPO/MJPC backend and contact metrics require alignment"
+  ]
+}

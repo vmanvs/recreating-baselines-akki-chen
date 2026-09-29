@@ -15,7 +15,9 @@ from go1_benchmark.mjpc_controller import MJPCController
 from go1_benchmark.mjpc_model import (
     FEET,
     MJPC_REVISION,
+    TERMS,
     calf_clearance,
+    foot_normal_forces,
     make_model,
     validate_config,
 )
@@ -49,6 +51,18 @@ def json_finite(value):
     if isinstance(value, (list, tuple)):
         return [json_finite(item) for item in value]
     return value
+
+
+def walking_check(summary):
+    """A gait check, separate from nominal speed tracking and planner timing."""
+    if not summary.get("nominal_pass"):
+        return False
+    gait = summary["gait"]
+    return bool(
+        gait["steady_contact_phase_match_fraction"] >= 0.85
+        and gait["steady_exactly_one_swing_fraction"] >= 0.65
+        and gait["steady_all_feet_airborne_fraction"] <= 0.01
+    )
 
 
 def evaluate(args):
@@ -121,10 +135,13 @@ def evaluate(args):
     work_physics = 0.0
     measured_impulse = 0.0
     started = time.perf_counter()
+    nonfoot_geometries = {}
+    first_nonfoot_time = []
 
-    def contacts():
+    def contacts(record=False):
         foot = np.zeros(4, dtype=bool)
         nonfoot = False
+        touched = set()
         for c in data.contact:
             if c.dist > 0 or floor not in c.geom:
                 continue
@@ -133,6 +150,12 @@ def evaluate(args):
                 foot[feet.index(other)] = True
             elif other >= 0 and other != floor:
                 nonfoot = True
+                touched.add(model.geom(other).name or f"geom-{other}")
+        if record:
+            for name in touched:
+                nonfoot_geometries[name] = nonfoot_geometries.get(name, 0) + 1
+            if nonfoot and not first_nonfoot_time:
+                first_nonfoot_time.append(float(data.time))
         return foot, nonfoot
 
     write_json(
@@ -144,6 +167,8 @@ def evaluate(args):
             "model_sha256": hashlib.sha256(model_path.read_bytes()).hexdigest(),
             "mujoco": mujoco.__version__,
             "numpy": np.__version__,
+            "task_residual_dimensions": TERMS,
+            "task_weights": config["task"]["weights"],
             "platform": platform.platform(),
             "seed": args.seed,
             "seed_scope": "Initial joint jitter only; upstream absl::BitGen sampling is unseeded",
@@ -184,10 +209,23 @@ def evaluate(args):
                 work_physics += float(
                     np.maximum(data.actuator_force * data.qvel[6:], 0).sum() * dt
                 )
-                interval_contact |= contacts()[1]
+                interval_contact |= contacts(record=True)[1]
             foot, nonfoot = contacts()
             local = data.sensor("local_linvel").data.copy()
             global_vel = data.sensor("global_linvel").data.copy()
+            residual = controller.residual(data)
+            term_costs = []
+            offset = 0
+            for name, dim in TERMS.items():
+                term_costs.append(
+                    0.5
+                    * config["task"]["weights"].get(name, 0)
+                    * float(
+                        residual[offset : offset + dim]
+                        @ residual[offset : offset + dim]
+                    )
+                )
+                offset += dim
             rows.append(
                 {
                     "time_s": float(data.time),
@@ -198,6 +236,12 @@ def evaluate(args):
                     "local_linvel": local,
                     "global_linvel": global_vel,
                     "foot_contact": foot,
+                    "foot_position_m": np.array(
+                        [data.site(f).xpos.copy() for f in FEET]
+                    ),
+                    "foot_normal_force_n": foot_normal_forces(model, data),
+                    "task_residual": residual,
+                    "task_term_cost": np.array(term_costs),
                     "calf_clearance_m": calf_clearance(model, data),
                     "nonfoot_ground_contact": nonfoot,
                     "nonfoot_ground_contact_any_substep": interval_contact,
@@ -255,6 +299,11 @@ def evaluate(args):
     )
     contact = trajectory["foot_contact"][steady]
     calf = trajectory["calf_clearance_m"][steady]
+    phases = (
+        trajectory["time_s"][:, None] / config["task"]["gait_period_s"]
+        - np.array([config["task"]["swing_order"].index(f) / 4 for f in FEET])
+    ) % 1
+    expected_contact = phases >= config["task"]["swing_fraction"]
     summary = {
         "controller": "MJPC predictive sampling",
         "duration_s": float(data.time),
@@ -269,8 +318,15 @@ def evaluate(args):
         "full_collision_evaluation": True,
         "failure": contact_failure,
         "failure_sampling": "Checked every physics step",
+        "first_nonfoot_contact_time_s": first_nonfoot_time[0]
+        if first_nonfoot_time
+        else None,
+        "nonfoot_contact_physics_steps_by_geometry": nonfoot_geometries,
         "sampled_nonfoot_contact_fraction": float(
             trajectory["nonfoot_ground_contact"].mean()
+        ),
+        "physics_interval_nonfoot_contact_fraction": float(
+            trajectory["nonfoot_ground_contact_any_substep"].mean()
         ),
         "finite": finite,
         "warnings": warnings,
@@ -331,6 +387,19 @@ def evaluate(args):
             )
             if steady.any()
             else None,
+            "steady_contact_phase_match_fraction": float(
+                (contact == expected_contact[steady]).mean()
+            )
+            if steady.any()
+            else None,
+        },
+        "task_cost": {
+            "term_order": list(TERMS),
+            "steady_mean_weighted_terms": dict(
+                zip(TERMS, trajectory["task_term_cost"][steady].mean(axis=0).tolist())
+            )
+            if steady.any()
+            else None,
         },
         "calf_clearance": {
             "steady_minimum_m_by_leg": dict(
@@ -345,12 +414,26 @@ def evaluate(args):
         },
         "mjpc_revision": MJPC_REVISION,
     }
+    # Keep the earlier speed/contact check separate from the stricter gait check.
+    summary["walking_criteria"] = {
+        "minimum_phase_match": 0.85,
+        "minimum_exactly_one_swing_fraction": 0.65,
+        "maximum_all_feet_airborne_fraction": 0.01,
+    }
+    summary["walking_pass"] = (
+        walking_check(summary) if not args.force_n and steady.any() else None
+    )
+    summary["planner_budget_pass"] = bool(
+        summary["planning"]["fraction_exceeding_control_budget"] == 0
+    )
     write_json(output / "summary.json", summary)
     print(json.dumps(json_finite(summary), indent=2, allow_nan=False), flush=True)
     if error or not finite or warnings or len(rows) != steps:
         raise RuntimeError("MJPC rollout incomplete or invalid; inspect saved summary")
     if args.require_pass and (args.force_n or not summary["nominal_pass"]):
         raise SystemExit("Nominal verification failed or was requested for a push run")
+    if args.require_walking and not summary["walking_pass"]:
+        raise SystemExit("Walking verification failed; inspect the gait metrics")
     return output
 
 
@@ -374,6 +457,7 @@ def build_parser():
         "--push-shape", choices=("rectangular", "triangular"), default="rectangular"
     )
     parser.add_argument("--require-pass", action="store_true")
+    parser.add_argument("--require-walking", action="store_true")
     return parser
 
 

@@ -58,7 +58,18 @@ def main():
         if revision != MJPC_REVISION:
             raise SystemExit(f"MJPC source must be at {MJPC_REVISION}, not {revision}")
         subprocess.run(
-            ["git", "-C", str(source), "diff", "--exit-code", revision, "--"],
+            # Windows checkouts use CRLF. Reject substantive source changes,
+            # without treating line endings as a planner modification.
+            [
+                "git",
+                "-C",
+                str(source),
+                "diff",
+                "--ignore-cr-at-eol",
+                "--quiet",
+                revision,
+                "--",
+            ],
             check=True,
         )
         command.append(f"-DFETCHCONTENT_SOURCE_DIR_MJPC_SOURCE={source}")

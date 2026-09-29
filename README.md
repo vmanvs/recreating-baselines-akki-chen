@@ -40,5 +40,8 @@ See [Build and evaluate MJPC](docs/mjpc.md). The new `mjpc/` C++ task and
 `go1-evaluate-mjpc` command use upstream MJPC's predictive-sampling planner,
 not the older `MPCController` in `controllers.py`. They match the PPO
 full-collision model and PD settings. Planner/task settings are independently
-chosen starting values, not recovered author settings or validated results.
+chosen independently, not recovered author settings. The current default passed
+three 12-second gait-aware development repeats, but planning exceeded the 20 ms
+budget on the local machine. See [Tuning outcomes and limits](docs/mjpc-tuning.md).
+These are offline development results, not the final paper benchmark.
 Build and run on Linux or WSL. PPO training and legacy controllers are unchanged.

@@ -82,7 +82,9 @@ class MJPCController:
         return action, cost.value
 
     def residual(self, data):
-        residual = self._np.empty(40, dtype=self._np.float64)
+        from go1_benchmark.mjpc_model import TERMS
+
+        residual = self._np.empty(sum(TERMS.values()), dtype=self._np.float64)
         if not self._handle:
             raise RuntimeError("MJPC controller is closed")
         status = self._lib.go1_mjpc_residual(

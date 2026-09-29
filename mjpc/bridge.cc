@@ -12,17 +12,20 @@
 
 namespace {
 thread_local std::string last_error;
-go1::Task* active_task = nullptr;
+const mjpc::ResidualFn* active_residual = nullptr;
 const mjModel* active_model = nullptr;
 void Sensor(const mjModel* m, mjData* d, int stage) {
-  if (m == active_model && active_task && stage == mjSTAGE_ACC) {
-    active_task->Residual(m, d, d->sensordata);
+  if (m == active_model && active_residual && stage == mjSTAGE_ACC) {
+    // Task settings stay fixed for a rollout. Use an immutable snapshot so
+    // simulation workers do not serialize on Task::Residual's mutex.
+    active_residual->Residual(m, d, d->sensordata);
   }
 }
 struct Controller {
   mjpc::UniqueMjModel model;
   mjpc::UniqueMjData data;
   go1::Task task;
+  std::unique_ptr<mjpc::ResidualFn> residual;
   mjpc::SamplingPlanner planner;
   mjpc::State state;
   mjpc::ThreadPool pool;
@@ -32,13 +35,14 @@ struct Controller {
       : model(mjpc::MakeUniqueMjModel(mj_loadModel(path, nullptr))),
         data(mjpc::MakeUniqueMjData(nullptr)), pool(threads), iterations(iters) {
     if (!model) throw std::runtime_error("Cannot load MJPC MJB model");
-    if (active_task) throw std::runtime_error("Only one MJPC controller per process");
+    if (active_residual) throw std::runtime_error("Only one MJPC controller per process");
     if (model->nq != 19 || model->nv != 18 || model->nu != 12 || model->na != 0)
       throw std::runtime_error("Expected position-actuated Go1 model dimensions");
     data = mjpc::MakeUniqueMjData(mj_makeData(model.get()));
     task.Reset(model.get());
-    if (task.num_residual != 40 || task.num_term != 8 || task.parameters.size() != 7)
+    if (task.num_residual != 58 || task.num_term != 13 || task.parameters.size() != 7)
       throw std::runtime_error("Go1 task schema mismatch; regenerate model");
+    residual = task.Residual();
     double dt = model->opt.timestep;
     horizon = std::lround(mjpc::GetNumberOrDefault(.4, model.get(), "agent_horizon") / dt) + 1;
     if (horizon < 2 || horizon > mjpc::kMaxTrajectoryHorizon)
@@ -52,12 +56,12 @@ struct Controller {
     // Set callback only after successful construction. It never modifies the
     // Python plant model or unrelated models in this process.
     previous_callback = mjcb_sensor;
-    active_model = model.get(); active_task = &task; mjcb_sensor = Sensor;
+    active_model = model.get(); active_residual = residual.get(); mjcb_sensor = Sensor;
   }
   ~Controller() {
-    if (active_task == &task) {
+    if (active_residual == residual.get()) {
       mjcb_sensor = previous_callback;
-      active_task = nullptr; active_model = nullptr;
+      active_residual = nullptr; active_model = nullptr;
     }
   }
 };

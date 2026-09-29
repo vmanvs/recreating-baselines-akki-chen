@@ -22,6 +22,11 @@ TERMS = {
     "Posture": 12,
     "Gait": 4,
     "CalfClearance": 4,
+    "Balance": 2,
+    "AngularVelocity": 3,
+    "FootPlacement": 8,
+    "SupportForce": 4,
+    "NonfootCollision": 1,
 }
 
 
@@ -41,6 +46,13 @@ def validate_config(config):
         raise ValueError("Times, gains and lengths must be positive and finite")
     if not math.isfinite(env["kd"]) or env["kd"] < 0:
         raise ValueError("kd must be nonnegative and finite")
+    for key in ("solver_iterations", "solver_ls_iterations"):
+        if key in env and (
+            isinstance(env[key], bool) or not isinstance(env[key], int) or env[key] < 1
+        ):
+            raise ValueError(f"{key} must be a positive integer")
+    if "disable_warmstart" in env and not isinstance(env["disable_warmstart"], bool):
+        raise ValueError("disable_warmstart must be a boolean")
     for key in ("samples", "spline_points", "iterations_per_control", "threads"):
         value = planner[key]
         if isinstance(value, bool) or not isinstance(value, int) or value < 1:
@@ -72,10 +84,24 @@ def validate_config(config):
         raise ValueError("swing_order must contain each foot exactly once")
     if not 0 < task["swing_fraction"] <= 0.25:
         raise ValueError("swing_fraction must be in (0, .25]")
-    if set(task["weights"]) != set(TERMS) or any(
+    required = set(TERMS) - {
+        "Balance",
+        "AngularVelocity",
+        "FootPlacement",
+        "SupportForce",
+        "NonfootCollision",
+    }
+    if not required <= set(task["weights"]) <= set(TERMS) or any(
         not math.isfinite(x) or x < 0 for x in task["weights"].values()
     ):
-        raise ValueError("Expected all eight nonnegative, finite cost weights")
+        raise ValueError(
+            "Expected required cost weights and only known, nonnegative finite weights"
+        )
+    if (
+        not math.isfinite(task.get("gait_startup_s", 0))
+        or task.get("gait_startup_s", 0) < 0
+    ):
+        raise ValueError("gait_startup_s must be nonnegative and finite")
 
 
 def task_xml(scene_xml: str, config: dict) -> str:
@@ -84,7 +110,7 @@ def task_xml(scene_xml: str, config: dict) -> str:
     root = ET.fromstring(scene_xml)
     sensor = ET.Element("sensor")
     for name, dim in TERMS.items():
-        weight = config["task"]["weights"][name]
+        weight = config["task"]["weights"].get(name, 0.0)
         ET.SubElement(
             sensor,
             "user",
@@ -104,6 +130,7 @@ def task_xml(scene_xml: str, config: dict) -> str:
             p["interpolation"]
         ),
         "sampling_exploration": p["exploration_fraction"],
+        "go1_gait_startup": t.get("gait_startup_s", 0),
         # Order is an ABI with go1_task.cc. Keep exactly seven residual numerics.
         "residual_vx": e["command_m_s_rad_s"][0],
         "residual_vy": e["command_m_s_rad_s"][1],
@@ -160,6 +187,10 @@ def make_model(config, menagerie_root: Path | None = None):
     env = config["environment"]
     model.opt.timestep = env["simulation_dt_s"]
     model.opt.ccd_iterations = 20
+    model.opt.iterations = env.get("solver_iterations", model.opt.iterations)
+    model.opt.ls_iterations = env.get("solver_ls_iterations", model.opt.ls_iterations)
+    if env.get("disable_warmstart", False):
+        model.opt.disableflags |= int(mujoco.mjtDisableBit.mjDSBL_WARMSTART)
     model.dof_damping[6:] = env["kd"]
     model.actuator_gainprm[:, 0] = env["kp"]
     model.actuator_biasprm[:, 1] = -env["kp"]
@@ -214,6 +245,38 @@ def calf_clearance(model, data):
     )
 
 
+def foot_normal_forces(model, data):
+    """Positive foot-floor contact loads, in FR/FL/RR/RL order."""
+    import mujoco
+    import numpy as np
+
+    forces = np.zeros(4)
+    foot_ids = [model.geom(f).id for f in FEET]
+    floor = model.geom("floor").id
+    wrench = np.zeros(6)
+    for i, contact in enumerate(data.contact):
+        if floor not in contact.geom:
+            continue
+        other = int(contact.geom[1] if contact.geom[0] == floor else contact.geom[0])
+        if other in foot_ids:
+            mujoco.mj_contactForce(model, data, i, wrench)
+            forces[foot_ids.index(other)] += max(wrench[0], 0)
+    return forces
+
+
+def nonfoot_collision_residual(model, data):
+    floor = model.geom("floor").id
+    feet = {model.geom(f).id for f in FEET}
+    penalty = 0.0
+    for contact in data.contact:
+        if floor not in contact.geom:
+            continue
+        other = int(contact.geom[1] if contact.geom[0] == floor else contact.geom[0])
+        if other not in feet:
+            penalty = max(penalty, (0.002 - contact.dist) / 0.01)
+    return penalty
+
+
 def reference_residual(model, data, config):
     """Independent Python reference used to verify the native residual ABI."""
     import numpy as np
@@ -229,6 +292,38 @@ def reference_residual(model, data, config):
         t["swing_height_m"] * np.sin(np.pi * p / t["swing_fraction"]),
         0,
     )
+    ramp = (
+        min(max(data.time / t["gait_startup_s"], 0), 1)
+        if t.get("gait_startup_s", 0) > 0
+        else 1
+    )
+    swing *= ramp
+    import mujoco
+
+    home = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, home, model.key("home").id)
+    mujoco.mj_forward(model, home)
+    home_rotation = home.body("trunk").xmat.reshape(3, 3)
+    foot_xy = np.array(
+        [(rot.T @ (data.site(f).xpos - data.body("trunk").xpos))[:2] for f in FEET]
+    )
+    home_xy = np.array(
+        [
+            (home_rotation.T @ (home.site(f).xpos - home.body("trunk").xpos))[:2]
+            for f in FEET
+        ]
+    )
+    fraction = t["swing_fraction"]
+    progress = np.where(
+        p < fraction,
+        -0.5 * np.cos(np.pi * p / fraction),
+        0.5 - (p - fraction) / (1 - fraction),
+    )
+    stride = np.array(e["command_m_s_rad_s"][:2]) * t["gait_period_s"] * (1 - fraction)
+    body_weight = model.body_subtreemass[model.body("trunk").id] * abs(
+        model.opt.gravity[2]
+    )
+    loads = foot_normal_forces(model, data) / body_weight
     limits = np.maximum(np.abs(model.actuator_forcerange).max(axis=1), 1)
     return np.concatenate(
         (
@@ -243,5 +338,12 @@ def reference_residual(model, data, config):
             )
             - swing,
             np.maximum(t["calf_clearance_margin_m"] - calf_clearance(model, data), 0),
+            data.subtree_com[model.body("trunk").id, :2]
+            + np.sqrt(2 * t["target_height_m"] / 9.81) * data.qvel[:2]
+            - np.mean([data.site(f).xpos[:2] for f in FEET], axis=0),
+            data.qvel[3:6],
+            (foot_xy - home_xy - ramp * progress[:, None] * stride).ravel(),
+            np.where(p < fraction, loads, np.maximum(0.1 - loads, 0)),
+            [nonfoot_collision_residual(model, data)],
         )
     )
