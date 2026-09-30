@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "name": "Independent Go1 PPO and offline MJPC comparison",
+  "controllers": ["ppo_reference", "ppo_gait", "ppo_calf", "mjpc"],
+  "policy_directories": {
+    "ppo_reference": "ppo-seed-000",
+    "ppo_gait": "ppo-gait-aware-seed-0",
+    "ppo_calf": "ppo-gait-calf-clearance-seed-000"
+  },
+  "push_controllers": ["ppo_calf", "mjpc"],
+  "initial_state_seeds": [100, 101, 102, 103, 104],
+  "push_seeds": [100, 101, 102],
+  "initial_joint_noise_rad": 0.01,
+  "nominal_duration_s": 30,
+  "push_duration_total_s": 12,
+  "warmup_s": 2,
+  "push_forces_n": [50, 100, 150],
+  "push_directions_deg": [90, 270],
+  "push_start_s": 5,
+  "pulse_duration_s": 0.2,
+  "pulse_shape": "rectangular",
+  "max_nominal_rmse_m_s": 0.15,
+  "recovery_tolerance_m_s": 0.15,
+  "recovery_dwell_s": 0.5,
+  "failure_rule": "Stop on first penetrating non-foot ground contact, inverted torso, nonfinite state, MuJoCo warning or controller error, checked every 4 ms. Retain every trial.",
+  "push_success_rule": "Complete and finite, no failure, prepush RMSE from 2 to 5 s <= 0.15 m/s, and postpush planar tracking error <= 0.15 m/s continuously for at least 0.5 s.",
+  "statistics": "Five initial-condition trials per nominal controller; three per push cell. Report counts and Wilson 95% binomial intervals. One independently trained seed per PPO variant; no training-seed generalization or causal ablation claims.",
+  "execution": "All trials serial on native MuJoCo full collisions. Deterministic noiseless PPO actor uses CPU JAX, compilation excluded. MJPC sampling is unseeded, with synchronous offline actions. Decisions are not delayed when they miss the 20 ms budget.",
+  "scope": "Flat terrain, fixed 0.5 m/s forward command, lateral rectangular pushes only. Development seeds 0,1,2 are excluded. These are selected checkpoints, not the authors' unavailable implementation. No tuning or checkpoint reselection on these outcomes."
+}
