@@ -1,0 +1,21 @@
+Data license: Creative Commons Attribution 4.0 International (CC BY 4.0)
+
+Copyright (c) 2026 Manvendra Vikram Singh, Maddala Jashwanth, Khushi Roy,
+Sehajdeep Singh, Paridhi Rathi, and Dhanya Thakur
+
+The following are licensed under CC BY 4.0:
+
+- The dataset archives attached to the paper-data-2026-09-30 GitHub release
+  (paper-2026-09-30.zip and paper-triangular-2026-09-30.zip), including the
+  recorded trials, frozen policy checkpoints, analysis outputs and videos.
+- The result tables, reports and figures under results/.
+
+You may share and adapt this material for any purpose, including commercially,
+provided you give appropriate credit, link to the license, and indicate whether
+changes were made. Please cite the accompanying paper when using the data.
+
+Full license text: https://creativecommons.org/licenses/by/4.0/legalcode
+
+Third-party components bundled inside the archives keep their own licenses.
+These include the compiled MuJoCo MPC bridge library and the MuJoCo model files
+derived from MuJoCo Playground and MuJoCo Menagerie.

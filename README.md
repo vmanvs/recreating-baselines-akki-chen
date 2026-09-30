@@ -1,13 +1,89 @@
-# Go1 simulation and PPO training
+# Survival and recovery of learned and model predictive Go1 locomotion controllers
 
-The `master` branch is the canonical workspace for simulations and controller
-development. The repository includes the earlier simulation scripts and an
-independent PPO training pipeline built on MuJoCo Playground and Brax.
+This repository holds the code, frozen protocols, results and paper source for an
+independent simulation comparison of learned (PPO) and model predictive (MJPC)
+controllers for the Unitree Go1 quadruped in MuJoCo. Three saved PPO policies and
+one upstream MJPC predictive-sampling controller are evaluated in a shared
+full-collision plant. There are 92 trials in total: 20 nominal, 36 rectangular-pulse
+and 36 triangular-pulse.
+
+This is an independent reconstruction motivated by
+[Akki and Chen, IEEE Access, 2025](https://doi.org/10.1109/ACCESS.2025.3582523).
+It does not claim to reproduce the authors' controller implementation exactly.
+
+## Paper
+
+The LaTeX source is in [`paper/`](paper). It uses the IEEE conference template and
+the vector figures in `paper/figures/`. The compiled PDF is not committed. To build it:
+
+```bash
+cd paper
+latexmk -pdf main.tex
+```
+
+`latexmk` needs Perl. Without Perl, run `pdflatex main.tex` twice instead.
+
+## Data
+
+The raw trial data are published as the
+[`paper-data-2026-09-30` release](https://github.com/vmanvs/recreating-baselines-akki-chen/releases/tag/paper-data-2026-09-30).
+
+| Archive | Size | Contents |
+|---|---|---|
+| `paper-2026-09-30.zip` | 1.1 GB | Main dataset: 20 nominal and 36 rectangular-push trials, frozen policies and sources, analysis, replay videos |
+| `paper-triangular-2026-09-30.zip` | 0.7 GB | Follow-up: 36 triangular-push trials, frozen policies and sources |
+
+Each trial folder under `runs/` contains `trial.json`, `experiment.json`, the
+compiled `model.mjb`, `summary.json`, the 50 Hz `trajectory.npz` and the 250 Hz
+`physics.npz`. The dataset-level `trial-index.json` summarizes every trial.
+`dataset-manifest.json` records the source, checkpoint, model and library
+identities.
+
+Verify a download against the checksums tracked in this repository. Place both
+archives in the repository root, then run:
+
+```bash
+sha256sum -c results/paper-2026-09-30/archive-checksum.sha256
+sha256sum -c results/paper-triangular-2026-09-30/archive-checksum.sha256
+```
+
+On Windows PowerShell, `Get-FileHash <archive> -Algorithm SHA256` gives the same hash.
+
+Compact reports, tables and figures are tracked in git:
+
+- [Main results report](results/paper-2026-09-30/paper-data-report.md)
+- [Triangular follow-up report](results/paper-triangular-2026-09-30/triangular-report.md)
+- [Main protocol and reproduction commands](docs/paper-dataset.md)
+- [Triangular protocol](docs/paper-triangular-tests.md)
+
+Main results: the calf-clearance PPO passed 5/5 nominal trials and MJPC passed 2/5.
+Under rectangular pushes, the final PPO completed 0/18 trials and MJPC 6/18.
+Under triangular pushes at the same peak forces, the counts were 6/18 and 12/18.
+Only 5 PPO and 4 MJPC triangular trials met the strict tracking-and-recovery
+criterion. The triangular pulses carry half the rectangular impulse. These
+outcomes describe the fixed selected controllers. They are not a multi-seed
+causal ablation or a demonstration of real-time or physical-robot performance.
+
+## Repository layout
+
+| Path | Contents |
+|---|---|
+| `src/go1_benchmark/` | PPO training and evaluation, native MJPC interface, dataset collection and metrics |
+| `mjpc/` | C++ Go1 task and bridge to the upstream MJPC planner |
+| `configs/` | Training, planner and protocol settings |
+| `scripts/` | Build, analysis, rendering and verification tools |
+| `tests/` | Unit and native implementation checks |
+| `ppo-*/` | Training manifests and logs for the three PPO policies (weights are in the data release) |
+| `results/` | Tracked reports, tables and figures for both datasets |
+| `paper/` | Paper LaTeX source and figures |
+| `docs/` | Setup, training, MJPC and dataset guides |
+| `mpc-and-rl-benchmark/` | Data and figures imported from the motivating benchmark |
+| `controllers.py`, `run_go1_simulation.py` | Earlier simulation implementation (see below) |
+
+## PPO training
 
 See [Train and verify a Go1 PPO policy](docs/train-from-scratch.md) for installation,
-fresh training, checkpoint verification, disturbance evaluation, and continuation.
-
-## PPO files
+fresh training, checkpoint verification, disturbance evaluation and continuation.
 
 - `src/go1_benchmark/train_ppo.py`: trains a neural policy from random weights.
 - `src/go1_benchmark/fixed_velocity_env.py`: Go1 environment commanded at 0.5 m/s.
@@ -15,52 +91,34 @@ fresh training, checkpoint verification, disturbance evaluation, and continuatio
 - `configs/ppo_fixed_velocity.json`: environment and training profiles.
 - `pyproject.toml` and `uv.lock`: package definition and locked dependencies.
 
-For GPU training on this Windows machine, use Ubuntu under WSL2 with a separate
-Linux environment. Native Windows JAX supports CPU execution, not NVIDIA CUDA.
-The guide includes WSL installation, GPU checks, lower-memory training settings,
-and native PowerShell CPU commands. Do not share a virtual environment between
-Windows and Linux.
-Then use `uv run --no-sync go1-train-ppo` and
+For GPU training on Windows, use Ubuntu under WSL2 with a separate Linux
+environment. Native Windows JAX supports CPU execution, not NVIDIA CUDA. The
+guide includes WSL installation, GPU checks, lower-memory training settings and
+native PowerShell CPU commands. Do not share a virtual environment between
+Windows and Linux. Then use `uv run --no-sync go1-train-ppo` and
 `uv run --no-sync go1-evaluate-ppo` with the arguments in the guide.
 
-The existing top-level `controllers.py` and `run_go1_simulation.py` remain the
-earlier simulation implementation. Their `RLController` is a hand-written gait,
-not the learned PPO policy. The PPO commands above use the new package. They do
-not silently replace that controller in the legacy runner.
+## MJPC baseline
 
-Imported source data live in `mpc-and-rl-benchmark`; previous local trajectories
-live in `sim_results`. New PPO runs should use separate output directories.
-This is an independent reconstruction of the benchmark associated with
-[DOI 10.1109/ACCESS.2025.3582523](https://doi.org/10.1109/ACCESS.2025.3582523).
-The authors' unavailable controller implementation is not claimed to be reproduced exactly.
+See [Build and evaluate MJPC](docs/mjpc.md). The `mjpc/` C++ task and the
+`go1-evaluate-mjpc` command use upstream MJPC's predictive-sampling planner, not
+the older `MPCController` in `controllers.py`. They use the same full-collision
+model and actuator settings as the PPO evaluation. Planner and task settings are
+chosen independently; they are not recovered author settings. Planning exceeds
+the 20 ms control budget on the development machine, and all evaluations run
+synchronously offline. See [Tuning outcomes and limits](docs/mjpc-tuning.md).
+Build and run on Linux or WSL.
 
-## Actual MJPC baseline
+## Earlier simulation code
 
-See [Build and evaluate MJPC](docs/mjpc.md). The new `mjpc/` C++ task and
-`go1-evaluate-mjpc` command use upstream MJPC's predictive-sampling planner,
-not the older `MPCController` in `controllers.py`. They match the PPO
-full-collision model and PD settings. Planner/task settings are independently
-chosen, not recovered author settings. The current default passed
-three 12-second gait-aware development repeats, but planning exceeded the 20 ms
-budget on the local machine. See [Tuning outcomes and limits](docs/mjpc-tuning.md).
-These are offline development results, not the final paper benchmark.
-Build and run on Linux or WSL. PPO training and legacy controllers are unchanged.
+The top-level `controllers.py` and `run_go1_simulation.py` are an earlier
+simulation implementation. Their `RLController` is a hand-written gait, not the
+learned PPO policy, and they are not used for the paper results. Previous local
+trajectories live in `sim_results/`.
 
-## Frozen paper dataset
+## License
 
-The 30 September 2026 benchmark contains 56 native MuJoCo trials: 20 nominal
-trials and 36 lateral-push trials. It evaluates genuine saved PPO checkpoints
-and upstream MJPC on the same full-collision plant. It does not use the legacy
-hand-written RL controller.
-
-See [the protocol and reproduction commands](docs/paper-dataset.md) and
-[the audited results](results/paper-2026-09-30/paper-data-report.md).
-Small tables and PNG/PDF figures are kept under `results/paper-2026-09-30`
-for version control.
-The raw trajectories, exact selected checkpoints and replay videos remain in
-ignored `outputs/paper-2026-09-30`, with a separate ZIP archive for preservation.
-
-The longer held-out trials are separate from MJPC tuning: calf-clearance PPO
-passed 5/5 nominal trials, while MJPC passed 2/5. These outcomes describe the
-fixed selected controllers, not a multi-training-seed causal reward ablation
-or a demonstration of real-time or physical-robot performance.
+Code, configuration and documentation are released under the [MIT License](LICENSE).
+The released datasets, trained policies and the contents of `results/` are released
+under [CC BY 4.0](LICENSE-DATA). Third-party folders, such as `mujoco_menagerie/`,
+`unitree_mujoco/` and `mpc-and-rl-benchmark/`, keep their own terms.

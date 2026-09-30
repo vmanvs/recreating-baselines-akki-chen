@@ -28,6 +28,16 @@ mpc-and-rl-benchmark/Other-Docs/*.mp4
 outputs/
 artifacts/
 private-docs/
+# Paper build outputs; only the LaTeX source is published.
+paper/*.pdf
+paper/*.aux
+paper/*.log
+paper/*.fls
+paper/*.fdb_latexmk
+paper/*.synctex.gz
+paper/*.out
+# Windows download metadata
+*Zone.Identifier
 checkpoints/
 logs/
 wandb/
