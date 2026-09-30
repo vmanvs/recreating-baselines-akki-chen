@@ -14,7 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
-from go1_benchmark.evaluate_mjpc import force_at, write_json
+from go1_benchmark.evaluate_mjpc import force_at, pulse_impulse, write_json
 from go1_benchmark.metrics import recovery_time
 from go1_benchmark.mjpc_controller import MJPCController
 from go1_benchmark.mjpc_model import (
@@ -328,7 +328,9 @@ def run_trial(model, policy, config, protocol, trial, output):
         else None,
         "wall_time_s": time.perf_counter() - started,
         "measured_impulse_n_s": measured_impulse,
-        "intended_impulse_n_s": trial["force_n"] * protocol["pulse_duration_s"],
+        "intended_impulse_n_s": pulse_impulse(
+            trial["force_n"], protocol["pulse_duration_s"], protocol["pulse_shape"]
+        ),
         "warnings": {
             str(i): int(w.number) for i, w in enumerate(data.warning) if w.number
         },

@@ -27,6 +27,7 @@ mpc-and-rl-benchmark/Other-Docs/*.mp4
 .mypy_cache/
 outputs/
 artifacts/
+private-docs/
 checkpoints/
 logs/
 wandb/

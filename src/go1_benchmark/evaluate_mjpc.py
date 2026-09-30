@@ -23,6 +23,17 @@ from go1_benchmark.mjpc_model import (
 )
 
 
+def pulse_impulse(peak_n, duration_s, shape):
+    """Analytical area of the commanded pulse, distinct from delivered area."""
+    if not math.isfinite(peak_n) or peak_n < 0:
+        raise ValueError("Peak force must be finite and nonnegative")
+    if not math.isfinite(duration_s) or duration_s <= 0:
+        raise ValueError("Push duration must be finite and positive")
+    if shape not in ("rectangular", "triangular"):
+        raise ValueError("Unknown push shape")
+    return peak_n * duration_s * (0.5 if shape == "triangular" else 1.0)
+
+
 def force_at(time_s, peak_n, start_s, duration_s, shape):
     if duration_s <= 0:
         raise ValueError("Push duration must be positive")

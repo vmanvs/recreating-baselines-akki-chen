@@ -1,0 +1,8 @@
+{
+  "matched_checkpoint_config_library": true,
+  "matched_initial_poses": true,
+  "passed": true,
+  "physics_pulse_verified": true,
+  "shared_model_sha256": "82b91868325657efad18102e39201936c86ba1bdf93bc7f582fec0640377b1e4",
+  "triangular_trials": 36
+}
